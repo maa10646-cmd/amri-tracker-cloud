@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════
-   Amri Maintenance Tracker — Cloud Mobile CSS v4.1
-   Premium dark glassmorphism, mobile-first design
+   Amri Maintenance Tracker — Cloud Mobile CSS v4.2
+   Premium dark glassmorphism, mobile-first design + list view
    ══════════════════════════════════════════════════════════ */
 
 /* ── Reset & Tokens ───────────────────────────────────── */
@@ -246,7 +246,7 @@ label { display: block; font-weight: 600; font-size: 12px; color: var(--text-sec
 /* ══════════════════════════════════════════════════════
    PUMP CARDS — Mobile-first
    ══════════════════════════════════════════════════════ */
-.pump-cards-grid {
+.pump-grid {
     display: grid; grid-template-columns: 1fr; gap: 10px;
 }
 .pump-card {

@@ -20,7 +20,7 @@ from api import router as api_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-APP_VERSION = "4.1.0"
+APP_VERSION = "4.2.0"
 APP_NAME = "Amri Maintenance Tracker"
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
@@ -164,6 +164,18 @@ def _seed_pumps(db):
         (10,"TH-55","HP-21",'GD-4"',42,date(2026,3,16),42,143,42,42,157,"Oil",""),
         (11,"TH-55","HP-60",'GD-4"',12,date(2026,3,18),150,150,150,150,27,"Oil",""),
         (12,"TH-55","HP-131",'GD-4"',35,date(2026,3,16),171,171,171,171,171,"Grease",""),
+        (13,"TH-55","HP-66",'GD-4"',21,date(2026,3,17),130,130,50,66,66,"Oil",""),
+        (14,"TH-55","HP-30",'GD-4"',16,date(2026,3,17),121,153,153,153,153,"Grease","New FE"),
+        (15,"TH-55","HP-77",'GD-4"',0,date(2026,3,18),136,177,99,144,137,"Grease",""),
+        (16,"TH-55","HP-91",'GD-4"',7,date(2026,3,17),58,58,58,58,58,"Oil","Lock FE"),
+        (17,"TH-55","HP-76",'GD-4"',0,date(2026,3,18),111,39,46,180,46,"Grease",""),
+        (18,"TH-55","HP-24",'GD-4"',24,date(2026,3,12),67,92,48,128,112,"Oil",""),
+        (19,"TH-55","HP-90",'GD-4"',0,date(2026,3,18),49,49,49,137,0,"Oil","New FE"),
+        (20,"TH-55","HP-61",'GD-4"',38,date(2026,3,16),214,214,60,214,214,"Oil",""),
+        (21,"TH-55","HP-13",'GD-4"',8,date(2026,3,18),138,26,105,86,128,"Oil",""),
+        (22,"TH-55","HP-121",'GD-4"',42,date(2026,3,16),131,131,131,131,131,"Grease","New FE"),
+        (23,"TH-55","HP-46",'GD-4"',30,date(2026,3,16),7,97,97,120,123,"Oil",""),
+        (24,"TH-55","HP-31",'GD-4"',7,date(2026,3,18),137,137,137,137,137,"Oil",""),
     ]
     for stn,trailer,name,model,stages,insp,h1,h2,h3,h4,h5,grease,notes in pumps:
         db.add(Pump(station=stn,trailer=trailer,pump_name=name,model=model,

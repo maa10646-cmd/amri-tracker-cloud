@@ -1,11 +1,12 @@
 /**
- * Amri Maintenance Tracker — Cloud Frontend v4.1
- * Mobile-first card UI with real-time WebSocket sync.
+ * Amri Maintenance Tracker — Cloud Frontend v4.2
+ * Full-feature mobile-first card/list UI with real-time WebSocket sync.
  */
 
 // ── State ─────────────────────────────────────────
 let pumps = [], removedPumps = [], authToken = null, currentUser = null;
 let ws = null, refreshTimer = null;
+let viewMode = localStorage.getItem('amt_view') || 'card'; // card | list
 const API = '';  // same origin
 
 // ── Init ──────────────────────────────────────────
@@ -177,11 +178,30 @@ function updateStats() {
 }
 
 // ══════════════════════════════════════════════════
+// VIEW MODE TOGGLE
+// ══════════════════════════════════════════════════
+function toggleViewMode() {
+    viewMode = viewMode === 'card' ? 'list' : 'card';
+    localStorage.setItem('amt_view', viewMode);
+    renderPumps();
+}
+
+// ══════════════════════════════════════════════════
 // RENDER PUMP CARDS — mobile-first
 // ══════════════════════════════════════════════════
 function renderPumps() {
     const c = document.getElementById('pumpContainer');
     if (!pumps.length) { c.innerHTML = '<div class="loading-placeholder">No pumps found</div>'; return; }
+
+    if (viewMode === 'list') {
+        renderListView(c);
+    } else {
+        renderCardView(c);
+    }
+}
+
+function renderCardView(c) {
+    c.className = 'pump-grid';
     c.innerHTML = pumps.map(p => {
         const a = p.alerts || {};
         const co = p.color_overrides || {};
@@ -217,7 +237,8 @@ function renderPumps() {
                 ${p.notes?`<span class="pc-info-chip">📝 ${esc(p.notes)}</span>`:''}
             </div>
             <div class="pc-actions">
-                <button class="btn btn-success btn-sm" onclick="addStageSingle(${p.id})">+1</button>
+                <button class="btn btn-success btn-sm" onclick="addStageSingle(${p.id})" title="+1 Stage">+1</button>
+                <button class="btn btn-warning btn-sm" onclick="subtractStageSingle(${p.id})" title="-1 Stage">-1</button>
                 <button class="btn btn-secondary btn-sm" onclick="openEditModal(${p.id})">✏️ Edit</button>
                 <button class="btn btn-xs btn-secondary" onclick="openSeatValveConfirm(${p.id})">🔧 S&V</button>
                 <button class="btn btn-xs btn-ghost" onclick="movePump(${p.id},'up')">▲</button>
@@ -225,6 +246,44 @@ function renderPumps() {
             </div>
         </div>`;
     }).join('');
+}
+
+function renderListView(c) {
+    c.className = 'pump-list-view';
+    let html = `<div class="list-header">
+        <span class="lh-name">Pump</span><span class="lh-stn">Stn</span>
+        <span class="lh-status">Status</span><span class="lh-stages">Stg</span>
+        <span class="lh-holes">H1</span><span class="lh-holes">H2</span>
+        <span class="lh-holes">H3</span><span class="lh-holes">H4</span>
+        <span class="lh-holes">H5</span><span class="lh-grease">Grease</span>
+        <span class="lh-actions">Actions</span>
+    </div>`;
+    html += pumps.map(p => {
+        const a = p.alerts || {};
+        const co = p.color_overrides || {};
+        const holeCells = [1,2,3,4,5].map(n => {
+            const v = p['hole_'+n+'_count'];
+            const clr = a['hole_'+n] || 'green';
+            return `<span class="lr-hole color-${clr}" onclick="showColorPicker(event,${p.id},'hole_${n}')">${v}</span>`;
+        }).join('');
+        const stgClr = a.stages || 'green';
+        return `<div class="list-row" data-id="${p.id}">
+            <span class="lr-name">${esc(p.pump_name)}</span>
+            <span class="lr-stn">${p.station}</span>
+            <span class="lr-status"><span class="pc-status pc-status-${p.status}" style="font-size:10px;padding:2px 6px">${p.status}</span></span>
+            <span class="lr-stages color-${stgClr}">${p.total_stages}</span>
+            ${holeCells}
+            <span class="lr-grease">${p.grease_type}</span>
+            <span class="lr-actions">
+                <button class="btn btn-success btn-xs" onclick="addStageSingle(${p.id})">+1</button>
+                <button class="btn btn-warning btn-xs" onclick="subtractStageSingle(${p.id})">-1</button>
+                <button class="btn btn-xs btn-secondary" onclick="openEditModal(${p.id})">✏️</button>
+                <button class="btn btn-xs btn-ghost" onclick="movePump(${p.id},'up')">▲</button>
+                <button class="btn btn-xs btn-ghost" onclick="movePump(${p.id},'down')">▼</button>
+            </span>
+        </div>`;
+    }).join('');
+    c.innerHTML = html;
 }
 
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -262,12 +321,19 @@ async function setColor(pumpId, field, color) {
 }
 
 // ══════════════════════════════════════════════════
-// ACTIONS
+// STAGE ACTIONS (+1 / -1 / bulk)
 // ══════════════════════════════════════════════════
 async function addStageSingle(id) {
     try {
         await apiPost(`/api/pumps/${id}/add-stage`, {operator_name: getOperator()});
         showToast('+1 stage', 'success'); loadPumps(true);
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function subtractStageSingle(id) {
+    try {
+        await apiPost(`/api/pumps/${id}/subtract-stage`, {operator_name: getOperator()});
+        showToast('-1 stage', 'success'); loadPumps(true);
     } catch(e) { showToast(e.message, 'error'); }
 }
 
@@ -282,6 +348,20 @@ async function addStageActive() {
     try {
         const r = await apiPost('/api/pumps/add-stage-active', {operator_name: getOperator()});
         showToast(`+1 stage to ${r.count} active`, 'success'); loadPumps(true);
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function subtractStageAll() {
+    try {
+        const r = await apiPost('/api/pumps/subtract-stage-all', {operator_name: getOperator()});
+        showToast(`-1 stage from ${r.count} pumps`, 'success'); loadPumps(true);
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function subtractStageActive() {
+    try {
+        const r = await apiPost('/api/pumps/subtract-stage-active', {operator_name: getOperator()});
+        showToast(`-1 stage from ${r.count} active`, 'success'); loadPumps(true);
     } catch(e) { showToast(e.message, 'error'); }
 }
 
@@ -321,6 +401,28 @@ async function doSeatValve(id) {
     } catch(e) { showToast(e.message, 'error'); }
 }
 
+// ── Packing Reset ────────────────────────────────
+function openPackingResetConfirm(id) {
+    const p = pumps.find(x=>x.id===id);
+    openModal(`<h3>🔧 Change Packing</h3>
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">Reset packing count to 0 for <strong>${esc(p?.pump_name)}</strong>?</p>
+        <label>Comment (optional)</label><input type="text" id="mPackComment" placeholder="Optional...">
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-warning" onclick="doPackingReset(${id})">✓ Reset Packing</button>
+        </div>`);
+}
+
+async function doPackingReset(id) {
+    try {
+        await apiPost(`/api/pumps/${id}/change-packing`, {
+            operator_name: getOperator(),
+            comment: document.getElementById('mPackComment')?.value || ''
+        });
+        showToast('Packing reset', 'success'); closeModal(); loadPumps(true);
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
 // ── Export ────────────────────────────────────────
 async function exportExcel() {
     try {
@@ -348,6 +450,41 @@ async function exportPDF() {
     } catch(e) { showToast(e.message || 'PDF export failed', 'error'); }
 }
 
+// ── Snapshot Save/Load ───────────────────────────
+async function saveSnapshot() {
+    try {
+        const res = await fetch(API + '/api/snapshot/save?operator=' + encodeURIComponent(getOperator()), {headers: authHeaders()});
+        if (!res.ok) throw new Error('Snapshot save failed');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `amri_snapshot_${new Date().toISOString().slice(0,19).replace(/[T:]/g,'_')}.json`;
+        a.click(); URL.revokeObjectURL(a.href);
+        showToast('Snapshot saved', 'success');
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+function loadSnapshotFile() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.json';
+    inp.onchange = async () => {
+        const file = inp.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await fetch(API + '/api/snapshot/load?operator=' + encodeURIComponent(getOperator()), {
+                method: 'POST', headers: authHeaders(), body: fd
+            });
+            if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Load failed'); }
+            const data = await res.json();
+            showToast(data.message, 'success');
+            loadPumps();
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+    inp.click();
+}
+
 // ══════════════════════════════════════════════════
 // MODAL SYSTEM
 // ══════════════════════════════════════════════════
@@ -360,7 +497,7 @@ document.addEventListener('click', e => {
     if (e.target.id === 'modalOverlay') closeModal();
 });
 
-// ── Edit Modal ────────────────────────────────────
+// ── Edit Modal (with rename, packing, full fields) ──
 function openEditModal(id) {
     const p = pumps.find(x=>x.id===id);
     if (!p) return;
@@ -368,6 +505,7 @@ function openEditModal(id) {
     openModal(`
         <h3>✏️ Edit ${esc(p.pump_name)}</h3>
         <div class="modal-grid">
+            <div class="modal-grid-wide"><label>Pump Name</label><input type="text" id="mPumpName" value="${esc(p.pump_name)}"></div>
             <div><label>Status</label><select id="mStatus">
                 ${['Active','Standby','Down','Maintenance'].map(s=>`<option${s===p.status?' selected':''}>${s}</option>`).join('')}
             </select></div>
@@ -375,6 +513,7 @@ function openEditModal(id) {
                 ${['Oil','Grease'].map(g=>`<option${g===p.grease_type?' selected':''}>${g}</option>`).join('')}
             </select></div>
             <div><label>Stages</label><input type="number" id="mStages" value="${p.total_stages}" min="0"></div>
+            <div><label>Packing</label><input type="number" id="mPacking" value="${p.packing_count}" min="0"></div>
             <div><label>H1</label><input type="number" id="mH1" value="${p.hole_1_count}" min="0"></div>
             <div><label>H2</label><input type="number" id="mH2" value="${p.hole_2_count}" min="0"></div>
             <div><label>H3</label><input type="number" id="mH3" value="${p.hole_3_count}" min="0"></div>
@@ -389,6 +528,7 @@ function openEditModal(id) {
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="saveEdit(${id})">💾 Save</button>
+            <button class="btn btn-warning btn-sm" onclick="openSeatValveConfirm(${id})" title="S&V Reset">🔧</button>
             <button class="btn btn-danger btn-sm" onclick="openRemoveConfirm(${id})" title="Remove">🚫</button>
             <button class="btn btn-accent btn-sm" onclick="openReplaceModal(${id})" title="Replace">🔄</button>
         </div>
@@ -397,12 +537,14 @@ function openEditModal(id) {
 
 async function saveEdit(id) {
     try {
-        // Save pump data
-        await apiPost(`/api/pumps/${id}/manual-edit`, {
+        const newName = document.getElementById('mPumpName').value.trim();
+        const pump = pumps.find(p=>p.id===id);
+        const body = {
             operator_name: getOperator(),
             status: document.getElementById('mStatus').value,
             grease_type: document.getElementById('mGrease').value,
             total_stages: parseInt(document.getElementById('mStages').value)||0,
+            packing_count: parseInt(document.getElementById('mPacking').value)||0,
             hole_1_count: parseInt(document.getElementById('mH1').value)||0,
             hole_2_count: parseInt(document.getElementById('mH2').value)||0,
             hole_3_count: parseInt(document.getElementById('mH3').value)||0,
@@ -410,10 +552,14 @@ async function saveEdit(id) {
             hole_5_count: parseInt(document.getElementById('mH5').value)||0,
             notes: document.getElementById('mNotes').value,
             inspection_date: document.getElementById('mInsp').value || null,
-        });
+        };
+        // Include pump name if changed
+        if (newName && pump && newName !== pump.pump_name) {
+            body.pump_name = newName;
+        }
+        await apiPost(`/api/pumps/${id}/manual-edit`, body);
         // Save group if changed
         const newGroup = document.getElementById('mGroup').value;
-        const pump = pumps.find(p=>p.id===id);
         if (pump && newGroup !== (pump.group_name || 'Unassigned')) {
             await apiPost(`/api/pumps/${id}/change-group`, {
                 operator_name: getOperator(), group_name: newGroup

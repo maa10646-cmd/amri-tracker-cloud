@@ -669,6 +669,70 @@ def add_stage_selected(req: AddStageSelectedRequest, db: Session = Depends(get_d
 
 
 # ══════════════════════════════════════════════════════════════════════
+# SUBTRACT STAGE (-1)
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/pumps/{pump_id}/subtract-stage")
+def subtract_stage_single(pump_id: int, req: AddStageRequest, db: Session = Depends(get_db)):
+    pump = db.query(Pump).filter(Pump.id == pump_id).first()
+    if not pump:
+        raise HTTPException(404, "Pump not found")
+    before = json.dumps(pump.snapshot())
+    pump.total_stages = max(0, pump.total_stages - 1)
+    pump.hole_1_count = max(0, pump.hole_1_count - 1)
+    pump.hole_2_count = max(0, pump.hole_2_count - 1)
+    pump.hole_3_count = max(0, pump.hole_3_count - 1)
+    pump.hole_4_count = max(0, pump.hole_4_count - 1)
+    pump.hole_5_count = max(0, pump.hole_5_count - 1)
+    pump.last_updated = datetime.utcnow()
+    after = json.dumps(pump.snapshot())
+    _log_action(db, req.operator_name, pump, "Subtract Stage", before, after, req.comment)
+    db.commit()
+    return pump.to_dict()
+
+
+@router.post("/pumps/subtract-stage-active")
+def subtract_stage_active(req: AddStageRequest, db: Session = Depends(get_db)):
+    pumps = db.query(Pump).filter(
+        Pump.status == "Active",
+        (Pump.fleet_state == "In Service") | (Pump.fleet_state.is_(None))
+    ).all()
+    count = 0
+    for pump in pumps:
+        pump.total_stages = max(0, pump.total_stages - 1)
+        pump.hole_1_count = max(0, pump.hole_1_count - 1)
+        pump.hole_2_count = max(0, pump.hole_2_count - 1)
+        pump.hole_3_count = max(0, pump.hole_3_count - 1)
+        pump.hole_4_count = max(0, pump.hole_4_count - 1)
+        pump.hole_5_count = max(0, pump.hole_5_count - 1)
+        pump.last_updated = datetime.utcnow()
+        count += 1
+    _log_bulk_action(db, req.operator_name, "Subtract Stage (Active Only)", count, req.comment)
+    db.commit()
+    return {"message": f"Subtracted stage from {count} active pumps", "count": count}
+
+
+@router.post("/pumps/subtract-stage-all")
+def subtract_stage_all(req: AddStageRequest, db: Session = Depends(get_db)):
+    pumps = db.query(Pump).filter(
+        (Pump.fleet_state == "In Service") | (Pump.fleet_state.is_(None))
+    ).all()
+    count = 0
+    for pump in pumps:
+        pump.total_stages = max(0, pump.total_stages - 1)
+        pump.hole_1_count = max(0, pump.hole_1_count - 1)
+        pump.hole_2_count = max(0, pump.hole_2_count - 1)
+        pump.hole_3_count = max(0, pump.hole_3_count - 1)
+        pump.hole_4_count = max(0, pump.hole_4_count - 1)
+        pump.hole_5_count = max(0, pump.hole_5_count - 1)
+        pump.last_updated = datetime.utcnow()
+        count += 1
+    _log_bulk_action(db, req.operator_name, "Subtract Stage (All)", count, req.comment)
+    db.commit()
+    return {"message": f"Subtracted stage from {count} pumps", "count": count}
+
+
+# ══════════════════════════════════════════════════════════════════════
 # SEAT & VALVE / PACKING
 # ══════════════════════════════════════════════════════════════════════
 

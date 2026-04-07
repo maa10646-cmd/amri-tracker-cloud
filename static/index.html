@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0a0f1a">
     <link rel="manifest" href="/static/manifest.json">
-    <link rel="stylesheet" href="/static/style.css?v=4.1">
+    <link rel="stylesheet" href="/static/style.css?v=4.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -34,7 +34,7 @@
             <button class="btn btn-primary btn-block" onclick="doLogin()" id="btnLogin">🔓 Sign In</button>
             <p id="loginError" class="login-error"></p>
         </div>
-        <p class="login-version">v4.1.0 — Cloud Edition</p>
+        <p class="login-version">v4.2.0 — Cloud Edition</p>
     </div>
 </div>
 
@@ -46,7 +46,7 @@
     <div class="app-title">
         <img src="/static/logo.png" alt="Elite" class="header-logo">
         <span class="title-text">Amri Tracker</span>
-        <span class="version-badge">v4.1</span>
+        <span class="version-badge">v4.2</span>
     </div>
     <div class="header-right">
         <div class="connection-indicator" id="connIndicator" title="Connecting...">
@@ -90,14 +90,17 @@
     <!-- Quick Actions -->
     <div class="quick-actions">
         <button class="btn btn-success" onclick="addStageAll()">➕ +1 All</button>
+        <button class="btn btn-warning" onclick="subtractStageAll()">➖ -1 All</button>
         <button class="btn btn-primary" onclick="addStageActive()">➕ Active</button>
+        <button class="btn btn-primary" onclick="subtractStageActive()" style="background:var(--warning)">➖ Active</button>
         <button class="btn btn-accent" onclick="openAddPumpDialog()">🆕 Add</button>
         <button class="btn btn-secondary" onclick="undoLastAction()">↩️ Undo</button>
+        <button class="btn btn-ghost" onclick="toggleViewMode()" title="Switch Card/List View">📊 View</button>
         <button class="btn btn-ghost" onclick="exportExcel()">📥 Excel</button>
         <button class="btn btn-ghost" onclick="exportPDF()">📄 PDF</button>
     </div>
     <!-- Pump Cards -->
-    <div id="pumpContainer" class="pump-cards-grid">
+    <div id="pumpContainer" class="pump-grid">
         <div class="loading-placeholder">Loading pumps...</div>
     </div>
 </div>
@@ -154,6 +157,6 @@
 <!-- ═══ TOAST ═══ -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="/static/app.js?v=4.1"></script>
+<script src="/static/app.js?v=4.2"></script>
 </body>
 </html>
