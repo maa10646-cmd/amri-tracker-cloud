@@ -11,6 +11,12 @@ const API = '';  // same origin
 
 // ── Init ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    // Show splash popout once per session
+    if (!sessionStorage.getItem('amt_splash_seen')) {
+        document.getElementById('splashOverlay').classList.remove('hidden');
+    } else {
+        document.getElementById('splashOverlay').classList.add('hidden');
+    }
     authToken = localStorage.getItem('amt_token');
     if (authToken) { checkAuth(); } else { showLogin(); }
     initTabs();
@@ -21,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') document.getElementById('loginPin').focus();
     });
 });
+
+// ── Splash Dismiss ───────────────────────────────
+function dismissSplash() {
+    sessionStorage.setItem('amt_splash_seen', '1');
+    document.getElementById('splashOverlay').classList.add('hidden');
+}
 
 // ── Auth ──────────────────────────────────────────
 function showLogin() {
