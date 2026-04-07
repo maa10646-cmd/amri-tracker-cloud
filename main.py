@@ -20,7 +20,7 @@ from api import router as api_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.1.0"
 APP_NAME = "Amri Maintenance Tracker"
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)

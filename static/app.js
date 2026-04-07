@@ -1,5 +1,5 @@
 /**
- * Amri Maintenance Tracker — Cloud Frontend v4.0
+ * Amri Maintenance Tracker — Cloud Frontend v4.1
  * Mobile-first card UI with real-time WebSocket sync.
  */
 
@@ -120,7 +120,11 @@ function startAutoRefresh() {
 async function checkConnection() {
     try {
         const r = await fetch(API + '/api/server-info');
-        if (r.ok) document.getElementById('connDot').classList.add('connected');
+        if (r.ok) {
+            document.getElementById('connDot').classList.add('connected');
+            const info = await r.json();
+            document.getElementById('connLabel').textContent = info.database || 'OK';
+        }
     } catch { document.getElementById('connDot').classList.remove('connected'); }
 }
 
@@ -166,7 +170,7 @@ function updateStats() {
     document.getElementById('statTotal').textContent = pumps.length;
     document.getElementById('statActive').textContent = pumps.filter(p => p.status === 'Active').length;
     document.getElementById('statStandby').textContent = pumps.filter(p => p.status === 'Standby').length;
-    document.getElementById('statDown').textContent = pumps.filter(p => p.status === 'Down').length;
+    document.getElementById('statDown').textContent = pumps.filter(p => p.status === 'Down' || p.status === 'Maintenance').length;
     document.getElementById('statAlerts').textContent = pumps.filter(p =>
         p.alerts.stages !== 'green' || p.alerts.seat_valve !== 'green'
     ).length;
@@ -190,6 +194,8 @@ function renderPumps() {
                 <div class="pc-hole-val">${v}</div><div class="pc-hole-lbl">H${n}</div></div>`;
         }).join('');
         const stgOv = co.stages ? ' color-override' : '';
+        const grpChip = p.group_name && p.group_name !== 'Unassigned'
+            ? `<span class="pc-info-chip">📍 ${esc(p.group_name)}</span>` : '';
         return `<div class="pump-card${hasAlert?' has-alert':''}" data-id="${p.id}">
             <div class="pc-header">
                 <div><span class="pc-name">${esc(p.pump_name)}</span>
@@ -206,12 +212,16 @@ function renderPumps() {
                     <div class="pc-metric-label">Inspected</div></div>
             </div>
             <div class="pc-holes">${holeHtml}</div>
-            ${p.notes?`<div class="pc-info"><span class="pc-info-chip">📝 ${esc(p.notes)}</span></div>`:''}
+            <div class="pc-info">
+                ${grpChip}
+                ${p.notes?`<span class="pc-info-chip">📝 ${esc(p.notes)}</span>`:''}
+            </div>
             <div class="pc-actions">
                 <button class="btn btn-success btn-sm" onclick="addStageSingle(${p.id})">+1</button>
                 <button class="btn btn-secondary btn-sm" onclick="openEditModal(${p.id})">✏️ Edit</button>
-                <button class="btn btn-sm btn-secondary" onclick="movePump(${p.id},'up')">▲</button>
-                <button class="btn btn-sm btn-secondary" onclick="movePump(${p.id},'down')">▼</button>
+                <button class="btn btn-xs btn-secondary" onclick="openSeatValveConfirm(${p.id})">🔧 S&V</button>
+                <button class="btn btn-xs btn-ghost" onclick="movePump(${p.id},'up')">▲</button>
+                <button class="btn btn-xs btn-ghost" onclick="movePump(${p.id},'down')">▼</button>
             </div>
         </div>`;
     }).join('');
@@ -271,7 +281,7 @@ async function addStageAll() {
 async function addStageActive() {
     try {
         const r = await apiPost('/api/pumps/add-stage-active', {operator_name: getOperator()});
-        showToast(`+1 stage to ${r.count} active pumps`, 'success'); loadPumps(true);
+        showToast(`+1 stage to ${r.count} active`, 'success'); loadPumps(true);
     } catch(e) { showToast(e.message, 'error'); }
 }
 
@@ -289,16 +299,53 @@ async function movePump(id, dir) {
     } catch(e) { showToast(e.message, 'error'); }
 }
 
-async function exportSnapshot() {
+// ── Seat & Valve ─────────────────────────────────
+function openSeatValveConfirm(id) {
+    const p = pumps.find(x=>x.id===id);
+    openModal(`<h3>🔧 Reset Seat & Valve</h3>
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">Reset all holes (H1-H5) to 0 for <strong>${esc(p?.pump_name)}</strong>?</p>
+        <label>Comment (optional)</label><input type="text" id="mSVComment" placeholder="Optional...">
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-warning" onclick="doSeatValve(${id})">✓ Reset S&V</button>
+        </div>`);
+}
+
+async function doSeatValve(id) {
     try {
-        const res = await fetch(API + `/api/snapshot/save?operator=${getOperator()}`, {headers: authHeaders()});
+        await apiPost(`/api/pumps/${id}/change-seat-valve`, {
+            operator_name: getOperator(),
+            comment: document.getElementById('mSVComment')?.value || ''
+        });
+        showToast('S&V reset', 'success'); closeModal(); loadPumps(true);
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ── Export ────────────────────────────────────────
+async function exportExcel() {
+    try {
+        const res = await fetch(API + '/api/export-excel', {headers: authHeaders()});
+        if (!res.ok) throw new Error('Export failed');
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `amri_snapshot_${new Date().toISOString().slice(0,10)}.json`;
-        a.click();
-        showToast('Snapshot saved', 'success');
-    } catch(e) { showToast('Snapshot failed', 'error'); }
+        a.download = `AmriTracker_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click(); URL.revokeObjectURL(a.href);
+        showToast('Excel downloaded', 'success');
+    } catch(e) { showToast(e.message || 'Excel export failed', 'error'); }
+}
+
+async function exportPDF() {
+    try {
+        const res = await fetch(API + '/api/export-pdf', {headers: authHeaders()});
+        if (!res.ok) throw new Error('Export failed');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `AmriTracker_${new Date().toISOString().slice(0,10)}.pdf`;
+        a.click(); URL.revokeObjectURL(a.href);
+        showToast('PDF downloaded', 'success');
+    } catch(e) { showToast(e.message || 'PDF export failed', 'error'); }
 }
 
 // ══════════════════════════════════════════════════
@@ -317,6 +364,7 @@ document.addEventListener('click', e => {
 function openEditModal(id) {
     const p = pumps.find(x=>x.id===id);
     if (!p) return;
+    const lim = p.limits || {};
     openModal(`
         <h3>✏️ Edit ${esc(p.pump_name)}</h3>
         <div class="modal-grid">
@@ -332,20 +380,24 @@ function openEditModal(id) {
             <div><label>H3</label><input type="number" id="mH3" value="${p.hole_3_count}" min="0"></div>
             <div><label>H4</label><input type="number" id="mH4" value="${p.hole_4_count}" min="0"></div>
             <div><label>H5</label><input type="number" id="mH5" value="${p.hole_5_count}" min="0"></div>
-            <div class="modal-grid-wide"><label>Notes</label><input type="text" id="mNotes" value="${esc(p.notes||'')}"></div>
             <div class="modal-grid-wide"><label>Inspection</label><input type="date" id="mInsp" value="${p.inspection_date||''}"></div>
+            <div class="modal-grid-wide"><label>Notes</label><input type="text" id="mNotes" value="${esc(p.notes||'')}"></div>
+            <div class="modal-grid-wide"><label>Group</label><select id="mGroup">
+                ${['Unassigned','Group A','Group B','Group C','Group D'].map(g=>`<option${g===(p.group_name||'Unassigned')?' selected':''}>${g}</option>`).join('')}
+            </select></div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="saveEdit(${id})">💾 Save</button>
-            <button class="btn btn-danger btn-sm" onclick="openRemoveConfirm(${id})">🚫</button>
-            <button class="btn btn-accent btn-sm" onclick="openReplaceModal(${id})">🔄</button>
+            <button class="btn btn-danger btn-sm" onclick="openRemoveConfirm(${id})" title="Remove">🚫</button>
+            <button class="btn btn-accent btn-sm" onclick="openReplaceModal(${id})" title="Replace">🔄</button>
         </div>
     `);
 }
 
 async function saveEdit(id) {
     try {
+        // Save pump data
         await apiPost(`/api/pumps/${id}/manual-edit`, {
             operator_name: getOperator(),
             status: document.getElementById('mStatus').value,
@@ -359,6 +411,14 @@ async function saveEdit(id) {
             notes: document.getElementById('mNotes').value,
             inspection_date: document.getElementById('mInsp').value || null,
         });
+        // Save group if changed
+        const newGroup = document.getElementById('mGroup').value;
+        const pump = pumps.find(p=>p.id===id);
+        if (pump && newGroup !== (pump.group_name || 'Unassigned')) {
+            await apiPost(`/api/pumps/${id}/change-group`, {
+                operator_name: getOperator(), group_name: newGroup
+            });
+        }
         showToast('Pump updated', 'success'); closeModal(); loadPumps(true);
     } catch(e) { showToast(e.message, 'error'); }
 }
@@ -367,7 +427,7 @@ async function saveEdit(id) {
 function openRemoveConfirm(id) {
     const p = pumps.find(x=>x.id===id);
     openModal(`<h3>🚫 Remove ${esc(p?.pump_name)}</h3>
-        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">This pump will be moved to Removed tab.</p>
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">This pump will be moved to Removed tab. Data is preserved.</p>
         <label>Reason</label><input type="text" id="mRemoveReason" placeholder="Reason...">
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -391,7 +451,7 @@ function openReplaceModal(id) {
         <div class="modal-grid">
             <div class="modal-grid-wide"><label>New Pump Name *</label><input type="text" id="mRepName" placeholder="e.g. HP-30"></div>
             <div><label>Model</label><input type="text" id="mRepModel" placeholder="GD-4"></div>
-            <div><label>Status</label><select id="mRepStatus"><option>Active</option><option>Standby</option></select></div>
+            <div><label>Status</label><select id="mRepStatus"><option>Active</option><option>Standby</option><option>Down</option></select></div>
             <div><label>Stages</label><input type="number" id="mRepStages" value="0" min="0"></div>
             <div><label>Grease</label><select id="mRepGrease"><option>Oil</option><option>Grease</option></select></div>
             <div class="modal-grid-wide"><label>Reason</label><input type="text" id="mRepReason" placeholder="Reason..."></div>
@@ -428,6 +488,7 @@ function openAddPumpDialog() {
             <div><label>Grease</label><select id="mAddGrease"><option>Oil</option><option>Grease</option></select></div>
             <div><label>Stages</label><input type="number" id="mAddStages" value="0" min="0"></div>
             <div><label>Inspection</label><input type="date" id="mAddInsp"></div>
+            <div class="modal-grid-wide"><label>Notes</label><input type="text" id="mAddNotes" placeholder="Notes..."></div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -447,6 +508,7 @@ async function doAddPump() {
             grease_type: document.getElementById('mAddGrease').value,
             total_stages: parseInt(document.getElementById('mAddStages').value)||0,
             inspection_date: document.getElementById('mAddInsp').value||null,
+            notes: document.getElementById('mAddNotes')?.value || '',
         });
         showToast(`${name} added`, 'success'); closeModal(); loadPumps(true);
     } catch(e) { showToast(e.message, 'error'); }
@@ -464,14 +526,15 @@ async function loadRemovedPumps() {
             <div class="removed-card">
                 <div class="pc-header">
                     <div><span class="pc-name">${esc(p.pump_name)}</span>
-                    <span class="pc-station">Stn ${p.station}</span></div>
+                    <span class="pc-station">Stn ${p.station} · ${p.model || '-'}</span></div>
                 </div>
                 <div class="pc-info">
                     <span class="pc-info-chip">Stages: ${p.total_stages}</span>
                     <span class="pc-info-chip">By: ${esc(p.removed_by||'-')}</span>
-                    <span class="pc-info-chip">${p.removal_reason||'-'}</span>
+                    <span class="pc-info-chip">${esc(p.removal_reason||'-')}</span>
+                    <span class="pc-info-chip">${p.removed_date ? new Date(p.removed_date).toLocaleDateString() : '-'}</span>
                 </div>
-                <button class="btn btn-success btn-block btn-sm" onclick="restorePump(${p.id})">♻️ Restore</button>
+                <button class="btn btn-success btn-block btn-sm" onclick="restorePump(${p.id})" style="margin-top:8px">♻️ Restore to Fleet</button>
             </div>`).join('');
     } catch { showToast('Failed to load removed', 'error'); }
 }
@@ -512,17 +575,29 @@ async function loadGroupSummary() {
         const data = await apiGet('/api/pumps/group-summary');
         const c = document.getElementById('groupContainer');
         const groups = data.groups || {};
-        c.innerHTML = Object.entries(groups).map(([name, g]) => `
+        const rec = data.recommendation || {};
+        let html = '';
+        if (rec.next_group) {
+            html += `<div class="group-card" style="border-left:4px solid var(--accent);grid-column:1/-1">
+                <h4>💡 Recommendation</h4>
+                <div class="group-stat"><span>Next Group</span><span style="color:var(--success)">${esc(rec.next_group)}</span></div>
+                ${rec.rotate_pump ? `<div class="group-stat"><span>Rotate Out</span><span style="color:var(--warning)">${esc(rec.rotate_pump)} (${esc(rec.rotate_from)})</span></div>` : ''}
+            </div>`;
+        }
+        html += Object.entries(groups).map(([name, g]) => `
             <div class="group-card">
                 <h4>${esc(name)} (${g.total})</h4>
-                <div class="group-stat"><span>Active</span><span>${g.active}</span></div>
-                <div class="group-stat"><span>Standby</span><span>${g.standby}</span></div>
-                <div class="group-stat"><span>Down</span><span>${g.down}</span></div>
+                <div class="group-stat"><span>Active</span><span style="color:var(--success)">${g.active}</span></div>
+                <div class="group-stat"><span>Standby</span><span style="color:var(--warning)">${g.standby}</span></div>
+                <div class="group-stat"><span>Down</span><span style="color:var(--danger)">${g.down}</span></div>
                 <div class="group-stat"><span>Total Stages</span><span>${g.total_stages}</span></div>
                 <div class="group-stat"><span>Avg Stages</span><span>${g.avg_stages}</span></div>
+                <div class="group-stat"><span>Highest Hole</span><span style="color:${g.highest_hole>=45?'var(--danger)':g.highest_hole>=35?'var(--warning)':'var(--success)'}">${g.highest_hole}</span></div>
                 <div class="group-stat"><span>Alerts</span><span style="color:${g.alerts?'var(--danger)':'var(--success)'}">${g.alerts}</span></div>
-                <div class="group-stat"><span>Balance</span><span>${g.balance}</span></div>
+                <div class="group-stat"><span>Balance</span><span style="color:${g.balance==='overloaded'?'var(--danger)':g.balance==='underused'?'var(--warning)':'var(--success)'}">${g.balance}</span></div>
+                ${g.pumps?.length ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Pumps: ${g.pumps.join(', ')}</div>` : ''}
             </div>`).join('');
+        c.innerHTML = html;
     } catch { showToast('Failed to load groups', 'error'); }
 }
 
@@ -542,6 +617,13 @@ async function loadSettings() {
         document.getElementById('sWellName').value = w.well_name || '';
         document.getElementById('sPadName').value = w.pad_name || '';
         document.getElementById('sRigName').value = w.rig_name || '';
+    } catch {}
+    try {
+        const info = await apiGet('/api/server-info');
+        document.getElementById('serverInfoPanel').innerHTML = `
+            <div><strong>App:</strong> ${esc(info.app_name)} v${esc(info.version)}</div>
+            <div><strong>Database:</strong> ${esc(info.database)}</div>
+            <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">User: ${esc(currentUser?.username||'-')} (${esc(currentUser?.role||'-')})</div>`;
     } catch {}
 }
 

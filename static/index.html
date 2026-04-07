@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Amri Maintenance Tracker</title>
-    <meta name="description" content="Pump maintenance tracking for hydraulic fracturing operations">
+    <meta name="description" content="Pump maintenance tracking for hydraulic fracturing operations — Mobile Cloud">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0f1923">
-    <link rel="stylesheet" href="/static/style.css">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0f1a">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="stylesheet" href="/static/style.css?v=4.1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -16,9 +18,10 @@
 <!-- ═══ LOGIN SCREEN ═══ -->
 <div id="loginScreen" class="login-screen">
     <div class="login-card">
+        <div class="login-glow"></div>
         <div class="login-logo">⚙️</div>
-        <h1>Amri Maintenance Tracker</h1>
-        <p class="login-subtitle">Pump Maintenance Cloud System</p>
+        <h1>Amri Tracker</h1>
+        <p class="login-subtitle">Pump Maintenance Cloud</p>
         <div class="login-form">
             <div class="login-field">
                 <label>Username</label>
@@ -31,7 +34,7 @@
             <button class="btn btn-primary btn-block" onclick="doLogin()" id="btnLogin">🔓 Sign In</button>
             <p id="loginError" class="login-error"></p>
         </div>
-        <p class="login-version">v4.0.0 — Cloud Edition</p>
+        <p class="login-version">v4.1.0 — Cloud Edition</p>
     </div>
 </div>
 
@@ -43,51 +46,57 @@
     <div class="app-title">
         <span class="icon">⚙️</span>
         <span class="title-text">Amri Tracker</span>
-        <span class="version-badge">v4.0</span>
+        <span class="version-badge">v4.1</span>
     </div>
     <div class="header-right">
-        <div class="connection-dot" id="connDot" title="Connecting..."></div>
+        <div class="connection-indicator" id="connIndicator" title="Connecting...">
+            <div class="conn-dot" id="connDot"></div>
+            <span class="conn-label" id="connLabel">—</span>
+        </div>
         <span class="user-badge" id="userBadge">—</span>
-        <button class="btn btn-sm btn-outline" onclick="doLogout()">Logout</button>
+        <button class="btn btn-sm btn-ghost" onclick="doLogout()" title="Logout">⏻</button>
     </div>
 </header>
 
-<!-- TAB BAR -->
+<!-- TAB BAR (bottom nav for mobile) -->
 <nav class="tab-bar" id="tabBar">
-    <button class="tab-btn active" data-tab="dashboard">📋 Fleet</button>
-    <button class="tab-btn" data-tab="groups">⚖️ Groups</button>
-    <button class="tab-btn" data-tab="removed">🚫 Removed</button>
-    <button class="tab-btn" data-tab="history">📜 History</button>
-    <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
+    <button class="tab-btn active" data-tab="dashboard">
+        <span class="tab-icon">📋</span><span class="tab-label">Fleet</span>
+    </button>
+    <button class="tab-btn" data-tab="groups">
+        <span class="tab-icon">⚖️</span><span class="tab-label">Groups</span>
+    </button>
+    <button class="tab-btn" data-tab="removed">
+        <span class="tab-icon">🚫</span><span class="tab-label">Removed</span>
+    </button>
+    <button class="tab-btn" data-tab="history">
+        <span class="tab-icon">📜</span><span class="tab-label">History</span>
+    </button>
+    <button class="tab-btn" data-tab="settings">
+        <span class="tab-icon">⚙️</span><span class="tab-label">Settings</span>
+    </button>
 </nav>
 
 <!-- ═══ DASHBOARD TAB ═══ -->
 <div class="tab-content active" id="tab-dashboard">
     <!-- Stats -->
     <div class="stats-bar">
-        <div class="stat-chip stat-total"><span id="statTotal">0</span> Total</div>
-        <div class="stat-chip stat-active"><span id="statActive">0</span> Active</div>
-        <div class="stat-chip stat-standby"><span id="statStandby">0</span> Standby</div>
-        <div class="stat-chip stat-down"><span id="statDown">0</span> Down</div>
-        <div class="stat-chip stat-alerts"><span id="statAlerts">0</span> ⚠</div>
+        <div class="stat-chip stat-total"><span class="stat-val" id="statTotal">0</span><span class="stat-lbl">Total</span></div>
+        <div class="stat-chip stat-active"><span class="stat-val" id="statActive">0</span><span class="stat-lbl">Active</span></div>
+        <div class="stat-chip stat-standby"><span class="stat-val" id="statStandby">0</span><span class="stat-lbl">Standby</span></div>
+        <div class="stat-chip stat-down"><span class="stat-val" id="statDown">0</span><span class="stat-lbl">Down</span></div>
+        <div class="stat-chip stat-alerts"><span class="stat-val" id="statAlerts">0</span><span class="stat-lbl">⚠ Alert</span></div>
     </div>
     <!-- Quick Actions -->
     <div class="quick-actions">
-        <button class="btn btn-success" onclick="addStageAll()">➕ +1 Stage All</button>
-        <button class="btn btn-primary" onclick="addStageActive()">➕ Active Only</button>
-        <button class="btn btn-accent" onclick="openAddPumpDialog()">🆕 Add Pump</button>
+        <button class="btn btn-success" onclick="addStageAll()">➕ +1 All</button>
+        <button class="btn btn-primary" onclick="addStageActive()">➕ Active</button>
+        <button class="btn btn-accent" onclick="openAddPumpDialog()">🆕 Add</button>
         <button class="btn btn-secondary" onclick="undoLastAction()">↩️ Undo</button>
-        <button class="btn btn-secondary" onclick="exportSnapshot()">💾 Snapshot</button>
+        <button class="btn btn-ghost" onclick="exportExcel()">📥 Excel</button>
+        <button class="btn btn-ghost" onclick="exportPDF()">📄 PDF</button>
     </div>
-    <!-- Legend -->
-    <div class="color-legend">
-        <span class="legend-title">Legend:</span>
-        <span class="legend-item"><span class="dot dot-green"></span>OK</span>
-        <span class="legend-item"><span class="dot dot-yellow"></span>Warn</span>
-        <span class="legend-item"><span class="dot dot-red"></span>Critical</span>
-        <span class="legend-item"><span class="dot dot-override"></span>Override</span>
-    </div>
-    <!-- Pump Cards Container -->
+    <!-- Pump Cards -->
     <div id="pumpContainer" class="pump-cards-grid">
         <div class="loading-placeholder">Loading pumps...</div>
     </div>
@@ -130,6 +139,8 @@
             <div class="sf sf-wide"><label>Rig</label><input type="text" id="sRigName"></div>
         </div>
         <button class="btn btn-primary btn-block" onclick="saveWellInfo()" style="margin-top:12px">💾 Save Well Info</button>
+        <h3 style="margin-top:24px">📊 Server</h3>
+        <div id="serverInfoPanel" class="server-info-panel">Loading...</div>
     </div>
 </div>
 
@@ -143,6 +154,6 @@
 <!-- ═══ TOAST ═══ -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=4.1"></script>
 </body>
 </html>
